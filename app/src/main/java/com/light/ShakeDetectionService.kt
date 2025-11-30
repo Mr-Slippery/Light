@@ -5,39 +5,66 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
-import kotlin.math.sqrt
 
 class ShakeDetectionService : Service(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private lateinit var cameraManager: CameraManager
+    private lateinit var sharedPreferences: SharedPreferences
     private var accelerometer: Sensor? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var cameraId: String? = null
     private var isFlashlightOn = false
 
-    // Shake detection variables
-    private var lastShakeTime: Long = 0
-    private var lastX = 0f
-    private var lastY = 0f
-    private var lastZ = 0f
+    // Shake detection
+    private lateinit var shakeDetector: ShakeDetector
+
+    // Auto-off timeout
+    private var timeoutMinutes = 0
+    private val autoOffHandler = Handler(Looper.getMainLooper())
+    private val autoOffRunnable = Runnable {
+        if (isFlashlightOn) {
+            toggleFlashlight()
+        }
+    }
 
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "ShakeDetectionChannel"
-        private const val SHAKE_THRESHOLD = 25f
-        private const val SHAKE_COOLDOWN = 1500L
+    }
+
+    private val settingsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                MainActivity.SENSITIVITY_ACTION -> {
+                    val threshold = intent.getFloatExtra(MainActivity.EXTRA_SENSITIVITY, 42.5f)
+                    shakeDetector.updateThreshold(threshold)
+                }
+                MainActivity.TIMEOUT_ACTION -> {
+                    timeoutMinutes = intent.getIntExtra(MainActivity.EXTRA_TIMEOUT, 0)
+                    // If light is currently on, restart the timer
+                    if (isFlashlightOn) {
+                        scheduleAutoOff()
+                    }
+                }
+            }
+        }
     }
 
     override fun onCreate() {
@@ -45,12 +72,36 @@ class ShakeDetectionService : Service(), SensorEventListener {
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        sharedPreferences = getSharedPreferences("LightPrefs", Context.MODE_PRIVATE)
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        // Initialize shake detector with saved sensitivity
+        val savedProgress = sharedPreferences.getInt("shake_sensitivity", 25)
+        val threshold = MainActivity.progressToThreshold(savedProgress)
+        shakeDetector = ShakeDetector(threshold) {
+            toggleFlashlight()
+        }
+
+        // Load saved timeout setting
+        timeoutMinutes = sharedPreferences.getInt(MainActivity.KEY_TIMEOUT, MainActivity.DEFAULT_TIMEOUT)
+
+        android.util.Log.d("ShakeService", "Initialized with progress=$savedProgress, threshold=$threshold, timeout=$timeoutMinutes")
 
         try {
             cameraId = cameraManager.cameraIdList[0]
         } catch (e: Exception) {
             // No camera available
+        }
+
+        // Register broadcast receiver for settings changes
+        val filter = IntentFilter().apply {
+            addAction(MainActivity.SENSITIVITY_ACTION)
+            addAction(MainActivity.TIMEOUT_ACTION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(settingsReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(settingsReceiver, filter)
         }
 
         // Acquire wake lock to keep CPU running for sensor detection
@@ -79,6 +130,16 @@ class ShakeDetectionService : Service(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
 
+        // Unregister broadcast receiver
+        try {
+            unregisterReceiver(settingsReceiver)
+        } catch (e: Exception) {
+            // Already unregistered
+        }
+
+        // Cancel any pending auto-off
+        autoOffHandler.removeCallbacks(autoOffRunnable)
+
         // Unregister sensor listener
         sensorManager.unregisterListener(this)
 
@@ -101,33 +162,22 @@ class ShakeDetectionService : Service(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            val x = event.values[0]
-            val y = event.values[1]
-            val z = event.values[2]
-
-            val currentTime = System.currentTimeMillis()
-
-            if (currentTime - lastShakeTime > SHAKE_COOLDOWN) {
-                val deltaX = x - lastX
-                val deltaY = y - lastY
-                val deltaZ = z - lastZ
-
-                val acceleration = sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
-
-                if (acceleration > SHAKE_THRESHOLD) {
-                    lastShakeTime = currentTime
-                    toggleFlashlight()
-                }
-            }
-
-            lastX = x
-            lastY = y
-            lastZ = z
+            shakeDetector.onSensorChanged(event)
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // Not needed
+    }
+
+    private fun scheduleAutoOff() {
+        // Cancel any existing timeout
+        autoOffHandler.removeCallbacks(autoOffRunnable)
+
+        // Schedule new timeout if enabled
+        if (timeoutMinutes > 0) {
+            autoOffHandler.postDelayed(autoOffRunnable, timeoutMinutes * 60 * 1000L)
+        }
     }
 
     private fun toggleFlashlight() {
@@ -136,6 +186,13 @@ class ShakeDetectionService : Service(), SensorEventListener {
                 isFlashlightOn = !isFlashlightOn
                 cameraManager.setTorchMode(id, isFlashlightOn)
                 updateNotification()
+
+                // Handle auto-off timeout
+                if (isFlashlightOn) {
+                    scheduleAutoOff()
+                } else {
+                    autoOffHandler.removeCallbacks(autoOffRunnable)
+                }
             }
         } catch (e: Exception) {
             // Ignore
