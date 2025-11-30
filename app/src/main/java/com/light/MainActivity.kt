@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var flashlightButton: FloatingActionButton
     private lateinit var shareAppButton: FloatingActionButton
+    private lateinit var strobeButton: FloatingActionButton
     private lateinit var backgroundServiceSwitch: SwitchMaterial
     private lateinit var sensitivitySeekBar: SeekBar
     private lateinit var sensitivityLabel: android.widget.TextView
@@ -43,6 +44,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var accelerometer: Sensor? = null
     private var cameraId: String? = null
     private var isFlashlightOn = false
+    private var isStrobeActive = false
 
     // Shake detection
     private lateinit var shakeDetector: ShakeDetector
@@ -54,6 +56,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (isFlashlightOn) {
             toggleFlashlight()
             Toast.makeText(this, "Light auto-off timeout", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Strobe mode
+    private val strobeHandler = Handler(Looper.getMainLooper())
+    private val strobeRunnable = object : Runnable {
+        override fun run() {
+            if (isStrobeActive) {
+                try {
+                    cameraId?.let { id ->
+                        isFlashlightOn = !isFlashlightOn
+                        cameraManager.setTorchMode(id, isFlashlightOn)
+                    }
+                    strobeHandler.postDelayed(this, 100) // Toggle every 100ms
+                } catch (e: Exception) {
+                    stopStrobe()
+                }
+            }
         }
     }
 
@@ -86,6 +106,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         flashlightButton = findViewById(R.id.flashlightButton)
         shareAppButton = findViewById(R.id.shareAppButton)
+        strobeButton = findViewById(R.id.strobeButton)
         backgroundServiceSwitch = findViewById(R.id.backgroundServiceSwitch)
         sensitivitySeekBar = findViewById(R.id.sensitivitySeekBar)
         sensitivityLabel = findViewById(R.id.sensitivityLabel)
@@ -149,6 +170,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         shareAppButton.setOnClickListener {
             shareApp()
+        }
+
+        strobeButton.setOnClickListener {
+            if (checkCameraPermission()) {
+                toggleStrobe()
+            } else {
+                requestCameraPermission()
+            }
         }
 
         backgroundServiceSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -250,6 +279,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         // Unregister sensor listener when app goes to background
         sensorManager.unregisterListener(this)
+        // Stop strobe when app goes to background
+        if (isStrobeActive) {
+            stopStrobe()
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -370,6 +403,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Stop strobe
+        if (isStrobeActive) {
+            stopStrobe()
+        }
+        // Turn off flashlight
         if (isFlashlightOn) {
             try {
                 cameraId?.let { cameraManager.setTorchMode(it, false) }
@@ -422,5 +460,53 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         } catch (e: Exception) {
             Toast.makeText(this, "Error sharing app: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun toggleStrobe() {
+        if (isStrobeActive) {
+            stopStrobe()
+        } else {
+            startStrobe()
+        }
+    }
+
+    private fun startStrobe() {
+        // Stop normal flashlight if it's on
+        if (isFlashlightOn) {
+            toggleFlashlight()
+        }
+
+        isStrobeActive = true
+
+        // Update strobe button appearance
+        runOnUiThread {
+            strobeButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.yellow)
+        }
+
+        // Start the strobe effect
+        strobeHandler.post(strobeRunnable)
+
+        Toast.makeText(this, "Strobe mode activated", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopStrobe() {
+        isStrobeActive = false
+        strobeHandler.removeCallbacks(strobeRunnable)
+
+        // Turn off flashlight and update button
+        try {
+            cameraId?.let { id ->
+                cameraManager.setTorchMode(id, false)
+                isFlashlightOn = false
+            }
+
+            runOnUiThread {
+                strobeButton.backgroundTintList = ContextCompat.getColorStateList(this, R.color.orange)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error stopping strobe: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+
+        Toast.makeText(this, "Strobe mode deactivated", Toast.LENGTH_SHORT).show()
     }
 }
