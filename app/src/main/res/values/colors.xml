@@ -5,5 +5,5 @@
     <color name="yellow">#FFFFEB3B</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="orange">#FFFF6D00</color>
-    <color name="ic_launcher_background">#FFFFEB3B</color>
+    <color name="ic_launcher_background">#FF000000</color>
 </resources>

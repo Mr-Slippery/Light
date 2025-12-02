@@ -5,18 +5,63 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.5"
-        android:scaleY="0.5"
-        android:translateX="27"
-        android:translateY="27">
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:translateX="32"
+        android:translateY="28">
+        <!-- Glow effect -->
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M32,10 C20,10 10,20 10,32 C10,40 14,46 18,50 L18,58 C18,60 20,62 22,62 L42,62 C44,62 46,60 46,58 L46,50 C50,46 54,40 54,32 C54,20 44,10 32,10 Z"
+            android:fillAlpha="0.3"/>
+
+        <!-- Main bulb -->
+        <path
+            android:fillColor="#FFEB3B"
+            android:pathData="M32,14 C22,14 14,22 14,32 C14,38 17,43 20,46 L20,54 C20,55 21,56 22,56 L42,56 C43,56 44,55 44,54 L44,46 C47,43 50,38 50,32 C50,22 42,14 32,14 Z"/>
+
+        <!-- Highlight -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M54,27c-14.9,0 -27,12.1 -27,27s12.1,27 27,27 27,-12.1 27,-27 -12.1,-27 -27,-27zM54,72c-9.9,0 -18,-8.1 -18,-18s8.1,-18 18,-18 18,8.1 18,18 -8.1,18 -18,18z"/>
+            android:pathData="M24,20 C24,20 22,24 22,28 C22,30 23,32 25,32 C26,32 27,31 27,30 C27,28 26,24 24,20 Z"
+            android:fillAlpha="0.6"/>
+
+        <!-- Base threads -->
         <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M54,42m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"/>
+            android:fillColor="#9E9E9E"
+            android:pathData="M22,56 L42,56 L42,59 L22,59 Z"/>
         <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M40,54L68,54L54,75Z"/>
+            android:fillColor="#757575"
+            android:pathData="M22,59 L42,59 L42,62 L22,62 Z"/>
+        <path
+            android:fillColor="#9E9E9E"
+            android:pathData="M22,62 L42,62 L42,65 L22,65 Z"/>
+
+        <!-- Contact point -->
+        <path
+            android:fillColor="#616161"
+            android:pathData="M28,65 L36,65 L36,68 L28,68 Z"/>
+
+        <!-- Light rays -->
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M32,5 L30,12 L34,12 Z"
+            android:fillAlpha="0.7"/>
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M10,20 L16,24 L14,28 Z"
+            android:fillAlpha="0.7"/>
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M54,20 L50,28 L48,24 Z"
+            android:fillAlpha="0.7"/>
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M5,32 L12,32 L12,36 L5,36 Z"
+            android:fillAlpha="0.7"/>
+        <path
+            android:fillColor="#FFF59D"
+            android:pathData="M52,32 L59,32 L59,36 L52,36 Z"
+            android:fillAlpha="0.7"/>
     </group>
 </vector>

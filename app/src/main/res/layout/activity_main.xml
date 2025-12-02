@@ -140,7 +140,7 @@
         android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:srcCompat="@android:drawable/ic_dialog_info" />
+        app:srcCompat="@drawable/ic_exclamation" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/shareAppButton"

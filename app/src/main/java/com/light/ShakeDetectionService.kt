@@ -46,7 +46,7 @@ class ShakeDetectionService : Service(), SensorEventListener {
 
     companion object {
         private const val NOTIFICATION_ID = 1
-        private const val CHANNEL_ID = "ShakeDetectionChannel"
+        private const val CHANNEL_ID = "ShakeDetectionChannelV2"
     }
 
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -207,6 +207,9 @@ class ShakeDetectionService : Service(), SensorEventListener {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps shake detection active in background"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
             }
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
@@ -230,6 +233,8 @@ class ShakeDetectionService : Service(), SensorEventListener {
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
             .build()
     }
 
