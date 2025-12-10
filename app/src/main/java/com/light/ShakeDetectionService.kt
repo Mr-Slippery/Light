@@ -21,6 +21,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 
 class ShakeDetectionService : Service(), SensorEventListener {
 
@@ -76,7 +77,7 @@ class ShakeDetectionService : Service(), SensorEventListener {
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
         // Initialize shake detector with saved sensitivity
-        val savedProgress = sharedPreferences.getInt("shake_sensitivity", 25)
+        val savedProgress = sharedPreferences.getInt(MainActivity.KEY_SENSITIVITY, MainActivity.DEFAULT_SENSITIVITY)
         val threshold = MainActivity.progressToThreshold(savedProgress)
         shakeDetector = ShakeDetector(threshold) {
             toggleFlashlight()
@@ -98,11 +99,12 @@ class ShakeDetectionService : Service(), SensorEventListener {
             addAction(MainActivity.SENSITIVITY_ACTION)
             addAction(MainActivity.TIMEOUT_ACTION)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(settingsReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            settingsReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         // Acquire wake lock to keep CPU running for sensor detection
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager

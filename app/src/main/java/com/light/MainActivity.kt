@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         const val KEY_BACKGROUND_SERVICE = "background_service_enabled"
         const val KEY_SENSITIVITY = "shake_sensitivity"
         const val KEY_TIMEOUT = "auto_off_timeout"
-        const val DEFAULT_SENSITIVITY = 20 // 20 on 0-50 scale
+        const val DEFAULT_SENSITIVITY = 50 // 50 on 0-50 scale
         const val DEFAULT_TIMEOUT = 3 // 3 minutes auto-off
         const val SENSITIVITY_ACTION = "com.light.SENSITIVITY_CHANGED"
         const val EXTRA_SENSITIVITY = "sensitivity"
