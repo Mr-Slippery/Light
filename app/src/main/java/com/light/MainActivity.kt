@@ -5,10 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.os.Build
@@ -26,28 +22,20 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import kotlin.math.sqrt
 
-class MainActivity : AppCompatActivity(), SensorEventListener {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var flashlightButton: FloatingActionButton
     private lateinit var shareAppButton: FloatingActionButton
     private lateinit var strobeButton: FloatingActionButton
     private lateinit var backgroundServiceSwitch: SwitchMaterial
-    private lateinit var sensitivitySeekBar: SeekBar
-    private lateinit var sensitivityLabel: android.widget.TextView
     private lateinit var timeoutSeekBar: SeekBar
     private lateinit var timeoutLabel: android.widget.TextView
     private lateinit var cameraManager: CameraManager
-    private lateinit var sensorManager: SensorManager
     private lateinit var sharedPreferences: SharedPreferences
-    private var accelerometer: Sensor? = null
     private var cameraId: String? = null
     private var isFlashlightOn = false
     private var isStrobeActive = false
-
-    // Shake detection
-    private lateinit var shakeDetector: ShakeDetector
 
     // Auto-off timeout
     private var timeoutMinutes = 0
@@ -82,22 +70,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 101
         const val PREFS_NAME = "LightPrefs"
         const val KEY_BACKGROUND_SERVICE = "background_service_enabled"
-        const val KEY_SENSITIVITY = "shake_sensitivity"
         const val KEY_TIMEOUT = "auto_off_timeout"
-        const val DEFAULT_SENSITIVITY = 50 // 50 on 0-50 scale
-        const val DEFAULT_TIMEOUT = 3 // 3 minutes auto-off
-        const val SENSITIVITY_ACTION = "com.light.SENSITIVITY_CHANGED"
-        const val EXTRA_SENSITIVITY = "sensitivity"
+        const val DEFAULT_TIMEOUT = 3
         const val TIMEOUT_ACTION = "com.light.TIMEOUT_CHANGED"
         const val EXTRA_TIMEOUT = "timeout"
-
-        // Convert SeekBar progress (0-50) to threshold (75-10)
-        // Progress 0 = threshold 75 (low sensitivity, requires hard shake)
-        // Progress 25 = threshold 42.5 (moderate)
-        // Progress 50 = threshold 10 (high sensitivity, very sensitive, light shake works)
-        fun progressToThreshold(progress: Int): Float {
-            return 75f - (progress.toFloat() * 1.3f)
-        }
+        const val SHAKE_THRESHOLD = 50f
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,28 +85,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         shareAppButton = findViewById(R.id.shareAppButton)
         strobeButton = findViewById(R.id.strobeButton)
         backgroundServiceSwitch = findViewById(R.id.backgroundServiceSwitch)
-        sensitivitySeekBar = findViewById(R.id.sensitivitySeekBar)
-        sensitivityLabel = findViewById(R.id.sensitivityLabel)
         timeoutSeekBar = findViewById(R.id.timeoutSeekBar)
         timeoutLabel = findViewById(R.id.timeoutLabel)
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
         try {
             cameraId = cameraManager.cameraIdList[0]
         } catch (e: Exception) {
             Toast.makeText(this, "No camera found", Toast.LENGTH_SHORT).show()
-        }
-
-        // Initialize shake detector
-        val savedSensitivity = sharedPreferences.getInt(KEY_SENSITIVITY, DEFAULT_SENSITIVITY)
-        shakeDetector = ShakeDetector(progressToThreshold(savedSensitivity)) {
-            if (checkCameraPermission()) {
-                toggleFlashlight()
-            }
         }
 
         // Restore background service state (default to true for first run)
@@ -150,10 +114,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
             }
         }
-
-        // Restore sensitivity setting
-        sensitivitySeekBar.progress = savedSensitivity
-        updateSensitivityLabel()
 
         // Restore timeout setting
         timeoutMinutes = sharedPreferences.getInt(KEY_TIMEOUT, DEFAULT_TIMEOUT)
@@ -198,25 +158,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        sensitivitySeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    val threshold = progressToThreshold(progress)
-                    sharedPreferences.edit().putInt(KEY_SENSITIVITY, progress).apply()
-                    shakeDetector.updateThreshold(threshold)
-                    updateSensitivityLabel()
-                    // Notify service of sensitivity change
-                    val intent = Intent(SENSITIVITY_ACTION)
-                    intent.setPackage(packageName) // Make broadcast explicit
-                    intent.putExtra(EXTRA_SENSITIVITY, threshold)
-                    sendBroadcast(intent)
-                }
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-
         timeoutSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -240,14 +181,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         })
     }
 
-    private fun updateSensitivityLabel() {
-        // Display inverted value: when threshold is low (10), show high sensitivity (75)
-        // when threshold is high (75), show low sensitivity (10)
-        val threshold = progressToThreshold(sensitivitySeekBar.progress)
-        val displayValue = (85 - threshold).toInt()
-        sensitivityLabel.text = "Shake Sensitivity: $displayValue"
-    }
-
     private fun updateTimeoutLabel() {
         val text = if (timeoutMinutes == 0) {
             "Auto-off: Never"
@@ -267,32 +200,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Register sensor listener when app is in foreground
-        accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-        }
-    }
-
     override fun onPause() {
         super.onPause()
-        // Unregister sensor listener when app goes to background
-        sensorManager.unregisterListener(this)
         // Stop strobe when app goes to background
         if (isStrobeActive) {
             stopStrobe()
         }
-    }
-
-    override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            shakeDetector.onSensorChanged(event)
-        }
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Not needed
     }
 
     private fun checkCameraPermission(): Boolean {
@@ -364,14 +277,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             startService(intent)
         }
         sharedPreferences.edit().putBoolean(KEY_BACKGROUND_SERVICE, true).apply()
-        Toast.makeText(this, "Background shake detection enabled", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Shake detection enabled", Toast.LENGTH_SHORT).show()
     }
 
     private fun stopBackgroundService() {
         val intent = Intent(this, ShakeDetectionService::class.java)
         stopService(intent)
         sharedPreferences.edit().putBoolean(KEY_BACKGROUND_SERVICE, false).apply()
-        Toast.makeText(this, "Background shake detection disabled", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Shake detection disabled", Toast.LENGTH_SHORT).show()
     }
 
     private fun toggleFlashlight() {

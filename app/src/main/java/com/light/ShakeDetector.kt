@@ -37,7 +37,7 @@ class ShakeDetector(
         private const val HISTORY_SIZE = 5
 
         // Minimum angle consistency (dot product threshold)
-        private const val DIRECTION_CONSISTENCY = 0.6f
+        private const val DIRECTION_CONSISTENCY = 0.4f
     }
 
     data class AccelerationData(
@@ -109,7 +109,6 @@ class ShakeDetector(
             accelerationHistory.removeAt(0)
         }
 
-        // Detect peaks in acceleration
         if (acceleration > threshold && currentTime - lastPeakTime > MIN_PEAK_INTERVAL) {
             // Verify it's a real peak by checking if it's local maximum
             if (isPeak(accelData)) {

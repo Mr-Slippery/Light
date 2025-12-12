@@ -53,13 +53,8 @@ class ShakeDetectionService : Service(), SensorEventListener {
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
-                MainActivity.SENSITIVITY_ACTION -> {
-                    val threshold = intent.getFloatExtra(MainActivity.EXTRA_SENSITIVITY, 42.5f)
-                    shakeDetector.updateThreshold(threshold)
-                }
                 MainActivity.TIMEOUT_ACTION -> {
                     timeoutMinutes = intent.getIntExtra(MainActivity.EXTRA_TIMEOUT, 0)
-                    // If light is currently on, restart the timer
                     if (isFlashlightOn) {
                         scheduleAutoOff()
                     }
@@ -76,17 +71,13 @@ class ShakeDetectionService : Service(), SensorEventListener {
         sharedPreferences = getSharedPreferences("LightPrefs", Context.MODE_PRIVATE)
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-        // Initialize shake detector with saved sensitivity
-        val savedProgress = sharedPreferences.getInt(MainActivity.KEY_SENSITIVITY, MainActivity.DEFAULT_SENSITIVITY)
-        val threshold = MainActivity.progressToThreshold(savedProgress)
-        shakeDetector = ShakeDetector(threshold) {
+        shakeDetector = ShakeDetector(MainActivity.SHAKE_THRESHOLD) {
             toggleFlashlight()
         }
 
-        // Load saved timeout setting
         timeoutMinutes = sharedPreferences.getInt(MainActivity.KEY_TIMEOUT, MainActivity.DEFAULT_TIMEOUT)
 
-        android.util.Log.d("ShakeService", "Initialized with progress=$savedProgress, threshold=$threshold, timeout=$timeoutMinutes")
+        android.util.Log.d("ShakeService", "Initialized with threshold=${MainActivity.SHAKE_THRESHOLD}, timeout=$timeoutMinutes")
 
         try {
             cameraId = cameraManager.cameraIdList[0]
@@ -94,9 +85,7 @@ class ShakeDetectionService : Service(), SensorEventListener {
             // No camera available
         }
 
-        // Register broadcast receiver for settings changes
         val filter = IntentFilter().apply {
-            addAction(MainActivity.SENSITIVITY_ACTION)
             addAction(MainActivity.TIMEOUT_ACTION)
         }
         ContextCompat.registerReceiver(
